@@ -4433,6 +4433,16 @@
     }
     // Restore close X for next open
     if (finvuClose) finvuClose.style.display = '';
+
+    // ===== Popup-window addition =====
+    // Tell the opener the AA flow finished so it can run the success widget
+    // on the parent page, then close this popup window.
+    try {
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage({ source: 'finvu-aa-popup', type: 'aa-flow-complete' }, '*');
+      }
+    } catch (e) { console.warn('postMessage failed', e); }
+    setTimeout(() => { try { window.close(); } catch(e){} }, 50);
   }
   window.openDrawer = openDrawer;
 
@@ -5139,33 +5149,13 @@
       }, 100);
     }
 
-    // Patch closeDrawer to postMessage + window.close
-    function patchClose() {
-      if (typeof window.closeDrawer === 'function') {
-        const original = window.closeDrawer;
-        window.closeDrawer = function(){
-          // Tell the opener the AA flow finished so they can update their UI
-          try {
-            if (window.opener && !window.opener.closed) {
-              window.opener.postMessage({ source: 'finvu-aa-popup', type: 'aa-flow-complete' }, '*');
-            }
-          } catch (e) { console.warn('postMessage failed', e); }
-          // Close the popup
-          setTimeout(() => { try { window.close(); } catch(e){} }, 50);
-        };
-      }
-    }
-
-    // The parent script binds via DOMContentLoaded; queue ours after it
+    // The parent script binds via DOMContentLoaded; run our startup after.
+    // (closeDrawer now self-posts + self-closes via the modified function in
+    // the bundled script — no runtime patching needed.)
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => {
-        startInPopup();
-        // Patch close after the original closeDrawer is defined
-        setTimeout(patchClose, 50);
-      });
+      document.addEventListener('DOMContentLoaded', startInPopup);
     } else {
       startInPopup();
-      setTimeout(patchClose, 50);
     }
 
     // Also: prevent the parent-page-only "auto-fire success" interceptor in the
